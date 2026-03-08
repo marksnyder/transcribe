@@ -4,7 +4,7 @@ A meeting transcription web app for Ubuntu. Records microphone and system audio 
 
 ## Features
 
-- Google Calendar integration — view today's meetings and select one to record
+- Microsoft Outlook calendar integration — view today's meetings and select one to record
 - Audio capture — microphone + system audio (via `getUserMedia` / `getDisplayMedia`)
 - Transcription — sends audio to OpenAI Whisper API, saves `.md` transcript
 - Upload — POST transcript to a user-configured endpoint with bearer auth
@@ -13,28 +13,30 @@ A meeting transcription web app for Ubuntu. Records microphone and system audio 
 ## Prerequisites
 
 - Node.js 20+
-- A Google Cloud project with Calendar API enabled
+- A Microsoft Azure app registration (for Outlook calendar)
 - An OpenAI API key (for Whisper)
 
-## Google Calendar OAuth Setup
+## Microsoft Graph API Setup (Outlook Calendar)
 
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
-2. Create a new project (or select an existing one).
-3. Navigate to **APIs & Services > Library** and enable the **Google Calendar API**.
-4. Go to **APIs & Services > Credentials** and create an **OAuth 2.0 Client ID**.
-   - Application type: **Web application**
-   - Authorized JavaScript origins: `http://localhost:5173`
-   - Authorized redirect URIs: `http://localhost:5173/`
-5. Copy the **Client ID** and **Client Secret**.
-6. Enter them in the app's Settings page or put them in `backend/.env`.
+1. Go to [portal.azure.com](https://portal.azure.com) → **Azure Active Directory** → **App registrations** → **New registration**.
+2. Name: **Transcribe**. Supported account types: **Accounts in any organizational directory and personal Microsoft accounts**.
+3. Redirect URI: **Web** → `http://localhost:3000/api/calendar/callback`.
+4. After creation, copy the **Application (client) ID** → set as `MICROSOFT_CLIENT_ID`.
+5. Go to **Certificates & secrets** → **New client secret** → copy the value → set as `MICROSOFT_CLIENT_SECRET`.
+6. `MICROSOFT_TENANT_ID`: use `common` for personal + work accounts, or your specific tenant ID for org-only access.
+7. Go to **API permissions** → **Add a permission** → **Microsoft Graph** → **Delegated permissions** → add:
+   - `Calendars.Read`
+   - `offline_access`
 
 ## Environment Variables
 
 Copy `backend/.env.example` to `backend/.env` and fill in:
 
 ```
-GOOGLE_CLIENT_ID=your-google-client-id
-GOOGLE_CLIENT_SECRET=your-google-client-secret
+MICROSOFT_CLIENT_ID=your-client-id
+MICROSOFT_CLIENT_SECRET=your-client-secret
+MICROSOFT_TENANT_ID=common
+MICROSOFT_REDIRECT_URI=http://localhost:3000/api/calendar/callback
 OPENAI_API_KEY=your-openai-api-key
 PORT=3000
 ```
@@ -111,7 +113,7 @@ The app merges microphone and system audio streams using the Web Audio API befor
 │   │   ├── index.js          # Express server
 │   │   ├── db.js             # SQLite (settings table)
 │   │   └── routes/
-│   │       ├── calendar.js   # Google Calendar API proxy
+│   │       ├── calendar.js   # Microsoft Graph API (Outlook)
 │   │       ├── transcribe.js # Whisper transcription
 │   │       └── upload.js     # POST transcript to endpoint
 │   ├── .env.example
@@ -121,7 +123,7 @@ The app merges microphone and system audio streams using the Web Audio API befor
 │   │   ├── main.jsx
 │   │   ├── App.jsx           # Router
 │   │   ├── pages/
-│   │   │   ├── Calendar.jsx  # OAuth + event list
+│   │   │   ├── Calendar.jsx  # Outlook OAuth + event list
 │   │   │   ├── Recording.jsx # Record + transcribe + upload
 │   │   │   └── Settings.jsx  # Config form
 │   │   └── components/

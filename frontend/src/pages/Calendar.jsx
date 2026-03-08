@@ -1,86 +1,76 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
-
-const SCOPES = "https://www.googleapis.com/auth/calendar.readonly";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 export default function Calendar() {
-  const [accessToken, setAccessToken] = useState(
-    () => sessionStorage.getItem("google_access_token") || ""
-  );
+  const [connected, setConnected] = useState(false);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [clientId, setClientId] = useState("");
+  const [error, setError] = useState("");
   const navigate = useNavigate();
-
-  useEffect(() => {
-    fetch("/api/settings")
-      .then((r) => r.json())
-      .then((s) => {
-        if (s.google_client_id) setClientId(s.google_client_id);
-      })
-      .catch(() => {});
-  }, []);
-
-  const handleLogin = () => {
-    if (!clientId) {
-      alert("Google Client ID not configured. Go to Settings first.");
-      return;
-    }
-    const redirectUri = window.location.origin + "/";
-    const url =
-      `https://accounts.google.com/o/oauth2/v2/auth?` +
-      `client_id=${encodeURIComponent(clientId)}` +
-      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-      `&response_type=token` +
-      `&scope=${encodeURIComponent(SCOPES)}`;
-    window.location.href = url;
-  };
-
-  // Handle OAuth redirect (implicit flow — token in hash)
-  useEffect(() => {
-    const hash = window.location.hash;
-    if (hash.includes("access_token")) {
-      const params = new URLSearchParams(hash.substring(1));
-      const token = params.get("access_token");
-      if (token) {
-        setAccessToken(token);
-        sessionStorage.setItem("google_access_token", token);
-        window.history.replaceState(null, "", "/");
-      }
-    }
-  }, []);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const fetchEvents = useCallback(async () => {
-    if (!accessToken) return;
     setLoading(true);
+    setError("");
     try {
-      const res = await fetch(`/api/calendar/events?access_token=${encodeURIComponent(accessToken)}`);
+      const res = await fetch("/api/calendar/events");
+      if (res.status === 401) {
+        setConnected(false);
+        setEvents([]);
+        return;
+      }
       const data = await res.json();
-      if (Array.isArray(data)) setEvents(data);
-      else setEvents([]);
+      if (Array.isArray(data)) {
+        setConnected(true);
+        setEvents(data);
+      } else {
+        setEvents([]);
+      }
     } catch {
+      setError("Failed to fetch events");
       setEvents([]);
     } finally {
       setLoading(false);
     }
-  }, [accessToken]);
+  }, []);
 
+  // On mount (or after OAuth redirect), try loading events
   useEffect(() => {
-    if (accessToken) fetchEvents();
-  }, [accessToken, fetchEvents]);
+    if (searchParams.get("auth") === "success") {
+      // Clean up the query param
+      setSearchParams({}, { replace: true });
+    }
+    fetchEvents();
+  }, [fetchEvents, searchParams, setSearchParams]);
+
+  const handleConnect = () => {
+    window.location.href = "/api/calendar/auth";
+  };
+
+  const handleLogout = async () => {
+    await fetch("/api/calendar/logout", { method: "POST" });
+    setConnected(false);
+    setEvents([]);
+  };
 
   return (
     <div>
       <h1>Today's Meetings</h1>
-      {!accessToken ? (
-        <button className="btn-primary" onClick={handleLogin}>
-          Sign in with Google
+      {error && <p style={{ color: "red" }}>{error}</p>}
+      {!connected ? (
+        <button className="btn-primary" onClick={handleConnect}>
+          Connect Outlook
         </button>
       ) : (
         <>
-          <button className="btn-primary" onClick={fetchEvents} style={{ marginBottom: 16 }}>
-            Refresh
-          </button>
+          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            <button className="btn-primary" onClick={fetchEvents}>
+              Refresh
+            </button>
+            <button className="btn-primary" onClick={handleLogout}>
+              Disconnect
+            </button>
+          </div>
           {loading && <p>Loading events...</p>}
           {events.length === 0 && !loading && <p>No events today.</p>}
           {events.map((event) => (
