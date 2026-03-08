@@ -1,0 +1,12 @@
+services:
+  transcribe-backend:
+    image: node:20
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+      - ./transcripts:/transcripts
+    ports:
+      - "3000:3000"
+    command: npm start
+    env_file:
+      - ./backend/.env
